@@ -113,7 +113,7 @@ async function extractCookie() {
   });
 
   const page = await browser.newPage();
-  await page.goto('https://feishu.cn/accounts/suite/login', { waitUntil: 'domcontentloaded' });
+  await page.goto('https://feishu.cn', { waitUntil: 'domcontentloaded' });
 
   log('👆 请在浏览器窗口中扫码登录飞书，登录成功后自动继续...\n');
 
