@@ -113,23 +113,32 @@ async function extractCookie() {
   });
 
   const page = await browser.newPage();
+  const client = await page.target().createCDPSession();
+  await client.send('Network.enable');
+
   await page.goto('https://feishu.cn', { waitUntil: 'domcontentloaded' });
 
   log('👆 请在浏览器窗口中扫码登录飞书，登录成功后自动继续...\n');
 
-  // 等待跳转离开登录页（URL 不再含 /accounts/）
-  await page.waitForFunction(
-    () => !window.location.pathname.startsWith('/accounts/'),
-    { timeout: 180000, polling: 1500 }
-  );
+  // 轮询 CDP Cookie，等到 session 出现才算登录成功
+  const timeout = 180000;
+  const start = Date.now();
+  let cookies = [];
+  while (Date.now() - start < timeout) {
+    await new Promise(r => setTimeout(r, 2000));
+    const result = await client.send('Network.getAllCookies');
+    const hasSession = result.cookies.some(
+      c => c.name === 'session' && (c.domain.includes('feishu') || c.domain.includes('lark'))
+    );
+    if (hasSession) {
+      cookies = result.cookies;
+      break;
+    }
+  }
 
-  // 等几秒让所有 Cookie 落地
-  await new Promise(r => setTimeout(r, 3000));
-
-  // CDP 读取全部 Cookie（包含 HttpOnly）
-  const client = await page.target().createCDPSession();
-  const { cookies } = await client.send('Network.getAllCookies');
   await browser.close();
+
+  if (!cookies.length) throw new Error('登录超时（3分钟），请重试');
 
   const feishuCookies = cookies.filter(c =>
     c.domain.includes('feishu.cn') || c.domain.includes('lark.cn') || c.domain.includes('larksuite.com')
